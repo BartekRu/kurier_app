@@ -21,7 +21,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 
-// Typy
 export type Point = {
   id: string;
   name: string;
@@ -31,7 +30,6 @@ export type Point = {
   info?: string;
 };
 
-// Pobierz wszystkie punkty z Firestore
 export async function getRoute(): Promise<Point[]> {
   const snapshot = await getDocs(collection(db, "route"));
   const points: Point[] = [];
@@ -51,7 +49,6 @@ export async function getRoute(): Promise<Point[]> {
   return points;
 }
 
-// Potwierdź dostarczenie punktu
 export async function confirmPoint(pointId: string): Promise<void> {
   const pointRef = doc(db, "route", pointId);
   await updateDoc(pointRef, {
@@ -60,9 +57,8 @@ export async function confirmPoint(pointId: string): Promise<void> {
   });
 }
 
-// Oblicz odległość między punktami (Haversine)
 function dist(a: Point, b: Point): number {
-  const R = 6371; // promień Ziemi w km
+  const R = 6371;
   const dLat = ((b.lat - a.lat) * Math.PI) / 180;
   const dLng = ((b.lng - a.lng) * Math.PI) / 180;
   const h =
@@ -73,7 +69,6 @@ function dist(a: Point, b: Point): number {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-// Algorytm najbliższego sąsiada (optymalizacja trasy)
 export function optimizeRoute(
   points: Point[],
   start?: { lat: number; lng: number }
@@ -104,11 +99,10 @@ export function optimizeRoute(
   return visited;
 }
 
-// Oblicz całkowitą długość trasy
 export function calculateRouteLength(points: Point[]): number {
   let totalDistance = 0;
   for (let i = 0; i < points.length - 1; i++) {
     totalDistance += dist(points[i], points[i + 1]);
   }
-  return Math.round(totalDistance * 10) / 10; // zaokrąglenie do 1 miejsca
+  return Math.round(totalDistance * 10) / 10; 
 }

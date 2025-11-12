@@ -33,7 +33,6 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [currentPointIndex, setCurrentPointIndex] = useState(0);
 
-  // Pobierz punkty z Firestore
   useEffect(() => {
     console.log("🔄 Pobieranie punktów z Firestore...");
     getRoute()
@@ -43,7 +42,8 @@ export default function App() {
           setError("Brak punktów w bazie danych. Dodaj punkty w Firestore.");
         }
         setPoints(data);
-        setDistance(calculateRouteLength(data));
+        const unvisited = data.filter(p => !p.visited);
+        setDistance(calculateRouteLength(unvisited));
         setLoading(false);
       })
       .catch((err) => {
@@ -53,7 +53,6 @@ export default function App() {
       });
   }, []);
 
-  // Śledzenie GPS
   useEffect(() => {
     if (navigator.geolocation) {
       console.log("📍 Uruchamiam GPS...");
@@ -71,16 +70,17 @@ export default function App() {
     }
   }, []);
 
-  // Oznacz punkt jako odwiedzony
   const markVisited = async (id: string) => {
     try {
       await confirmPoint(id);
-      setPoints((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, visited: true } : p))
-      );
+      setPoints((prev) => {
+        const updated = prev.map((p) => (p.id === id ? { ...p, visited: true } : p));
+        const unvisited = updated.filter(p => !p.visited);
+        setDistance(calculateRouteLength(unvisited));
+        return updated;
+      });
       console.log("✅ Punkt oznaczony:", id);
       
-      // Przejdź do następnego punktu
       const nextIndex = points.findIndex(p => !p.visited && p.id !== id);
       if (nextIndex !== -1) {
         setCurrentPointIndex(nextIndex);
@@ -91,35 +91,38 @@ export default function App() {
     }
   };
 
-  // Optymalizuj trasę
   const handleOptimize = () => {
     const startPoint = position ? { lat: position[0], lng: position[1] } : undefined;
-    const optimized = optimizeRoute(points, startPoint);
-    setPoints(optimized);
+    const unvisitedPoints = points.filter(p => !p.visited);
+    const visitedPoints = points.filter(p => p.visited);
+    
+    if (unvisitedPoints.length === 0) {
+      alert("Wszystkie punkty zostały już odwiedzone!");
+      return;
+    }
+    
+    const optimized = optimizeRoute(unvisitedPoints, startPoint);
+    setPoints([...optimized, ...visitedPoints]);
     setDistance(calculateRouteLength(optimized));
     setCurrentPointIndex(0);
-    console.log("🔄 Trasa zoptymalizowana");
+    console.log("🔄 Trasa zoptymalizowana (tylko nieodwiedzone punkty)");
   };
 
-  // Nawigacja do punktu
   const navigateToPoint = (point: Point) => {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isAndroid = /Android/.test(navigator.userAgent);
     
     if (isIOS) {
-      // Apple Maps
       window.open(
         `maps://maps.apple.com/?daddr=${point.lat},${point.lng}&dirflg=d`,
         '_blank'
       );
     } else if (isAndroid) {
-      // Google Maps (Android)
       window.open(
         `google.navigation:q=${point.lat},${point.lng}`,
         '_blank'
       );
     } else {
-      // Desktop - Google Maps w przeglądarce
       window.open(
         `https://www.google.com/maps/dir/?api=1&destination=${point.lat},${point.lng}&travelmode=driving`,
         '_blank'
@@ -127,7 +130,6 @@ export default function App() {
     }
   };
 
-  // Znajdź najbliższy nieodwiedzony punkt
   const findNearestUnvisited = () => {
     if (!position) {
       alert("Czekam na lokalizację GPS...");
@@ -166,7 +168,6 @@ export default function App() {
     navigateToPoint(nearest);
   };
 
-  // Oblicz odległość (Haversine)
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -243,14 +244,12 @@ export default function App() {
           attribution="&copy; OpenStreetMap"
         />
 
-        {/* Moja pozycja */}
         {position && (
           <Marker position={position} icon={meIcon}>
             <Popup>📍 Twoja pozycja</Popup>
           </Marker>
         )}
 
-        {/* Punkty dostawy */}
         {points.map((p, index) => (
           <Marker
             key={p.id}
@@ -310,10 +309,9 @@ export default function App() {
           </Marker>
         ))}
 
-        {/* Linia trasy */}
-        {points.length > 1 && (
+        {unvisitedPoints.length > 1 && (
           <Polyline
-            positions={points.map((p) => [p.lat, p.lng])}
+            positions={unvisitedPoints.map((p) => [p.lat, p.lng])}
             color="blue"
             weight={4}
             opacity={0.7}
@@ -321,7 +319,6 @@ export default function App() {
         )}
       </MapContainer>
 
-      {/* Panel kontrolny */}
       <div
         style={{
           position: "absolute",
@@ -337,14 +334,14 @@ export default function App() {
       >
         <button
           onClick={handleOptimize}
-          disabled={points.length < 2}
+          disabled={unvisitedPoints.length < 2}
           style={{
             padding: "10px 16px",
-            backgroundColor: points.length < 2 ? "#ccc" : "#2196F3",
+            backgroundColor: unvisitedPoints.length < 2 ? "#ccc" : "#2196F3",
             color: "white",
             border: "none",
             borderRadius: "4px",
-            cursor: points.length < 2 ? "not-allowed" : "pointer",
+            cursor: unvisitedPoints.length < 2 ? "not-allowed" : "pointer",
             fontSize: "14px",
             fontWeight: "bold",
             width: "100%",
